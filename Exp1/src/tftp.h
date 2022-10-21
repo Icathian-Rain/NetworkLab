@@ -2,6 +2,7 @@
 #include <iostream>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+#include "velometer.h"
 
 // tftp基础设置
 #define TFTP_PORT 69
@@ -119,8 +120,22 @@ namespace tftp
         else if (op == TFTP_OPCODE_WRQ && mode == TFTP_OCTET)
             fp = fopen(fileName, "rb");
 
-        while (1)
+
+        // 计时器
+        velometer velo;
+        int bytes = 0;
+        velo.start();
+        for(int i = 0; i<= 0xffff; i++)
         {
+            // 测速器输出速率
+            if(i % 1000 == 0)
+            {
+                velo.stop();
+                velo.showV(bytes);
+    
+                velo.start();
+                bytes = 0;
+            }
             // 发送请求
             sendto(clientSock, reqBuff, reqLen, 0, (struct sockaddr *)&addr, sizeof(addr));
             // 超时处理
@@ -129,6 +144,7 @@ namespace tftp
             tv.tv_sec = TFTP_TIMEOUT;
             tv.tv_usec = 0;
             select(clientSock + 1, &readfds, NULL, NULL, &tv);
+
             if (FD_ISSET(clientSock, &readfds))
             {
                 // 接收数据
@@ -153,6 +169,7 @@ namespace tftp
                                 ackNum++;
                                 sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_ACK, recvBuff[2], recvBuff[3]);
                                 fwrite(recvBuff + 4, 1, recvLen - 4, fp);
+                                bytes += recvLen - 4;
                                 reqLen = 4;
                                 if (recvLen < 516)
                                 {
@@ -182,6 +199,7 @@ namespace tftp
                                 ackNum++;
                                 sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_DATA, ackNum >> 8, ackNum & 0xff);
                                 reqLen = fread(reqBuff + 4, 1, TFTP_DATA_SIZE, fp);
+                                bytes += reqLen;
                                 if (reqLen == 0)
                                 {
                                     break;
@@ -201,7 +219,6 @@ namespace tftp
                             return -1;
                         }
                     }
-                    
                 }
             }
             else
@@ -216,6 +233,8 @@ namespace tftp
                 }
             }
         }
+        cout << endl;
+        printf("success\n");
         clear(fp, clientSock);
         return 0;
     }
