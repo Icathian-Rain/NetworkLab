@@ -3,6 +3,7 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #include "velometer.h"
+#include "log.h"
 
 // tftp基础设置
 #define TFTP_PORT 69
@@ -22,6 +23,7 @@ const char *Transfermode[2] = {"netascii", "octet"};
 #define TFTP_NETASCII 0
 #define TFTP_OCTET 1
 
+Log logger;
 
 // tftp命名空间
 namespace tftp
@@ -65,7 +67,6 @@ namespace tftp
     {
         fclose(fp);
         closesocket(sock);
-        WSACleanup();
     }
 
     /// @brief TFTP发送请求包
@@ -85,7 +86,7 @@ namespace tftp
         SOCKET clientSock = socket(AF_INET, SOCK_DGRAM, 0);
         if (clientSock == -1)
         {
-            printf("socket is error\n");
+            logger.write(Record(0, 1, "socket error"));
             return -1;
         }
 
@@ -120,24 +121,38 @@ namespace tftp
         else if (op == TFTP_OPCODE_WRQ && mode == TFTP_OCTET)
             fp = fopen(fileName, "rb");
 
+        if (fp == nullptr)
+        {
+            logger.write(Record(0, 1, "open file error"));
+            return -1;
+        }
+
+        if( op == TFTP_OPCODE_RRQ)
+        logger.write(Record(0, 0, "start sendto"));
+        else if (op == TFTP_OPCODE_WRQ)
+        logger.write(Record(0, 0, "start receive"));
 
         // 计时器
         velometer velo;
         int bytes = 0;
+        int totalBytes = 0;
         velo.start();
-        for(int i = 0; i<= 0xffff; i++)
+        int i;
+        for(i = 0; ; i++)
         {
             // 测速器输出速率
             if(i % 1000 == 0)
             {
-                velo.stop();
-                velo.showV(bytes);
-    
-                velo.start();
+                velo.showInsV(bytes);
                 bytes = 0;
             }
             // 发送请求
-            sendto(clientSock, reqBuff, reqLen, 0, (struct sockaddr *)&addr, sizeof(addr));
+            int err = sendto(clientSock, reqBuff, reqLen, 0, (struct sockaddr *)&addr, sizeof(addr));
+            if (err == -1)
+            {
+                logger.write(Record(0, 1, "sendto error"));
+                return -1;
+            }
             // 超时处理
             FD_ZERO(&readfds);
             FD_SET(clientSock, &readfds);
@@ -158,11 +173,13 @@ namespace tftp
                     memcpy((struct sockaddr *)&addr, (struct sockaddr *)&from, sizeof(fromlen));
                     // 获取分组号
                     int blockNum = (recvBuff[2] << 8) + recvBuff[3];
+                    // 获取操作码
+                    int opcode = (recvBuff[0] << 8) + recvBuff[1];
                     // 判断操作类型
                     if (op == TFTP_OPCODE_RRQ)
                     // 若为读取操作
                     {
-                        if (recvBuff[1] == TFTP_OPCODE_DATA)
+                        if (opcode == TFTP_OPCODE_DATA)
                         {
                             if(blockNum == (ackNum + 1))
                             {
@@ -170,6 +187,7 @@ namespace tftp
                                 sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_ACK, recvBuff[2], recvBuff[3]);
                                 fwrite(recvBuff + 4, 1, recvLen - 4, fp);
                                 bytes += recvLen - 4;
+                                totalBytes += recvLen - 4;
                                 reqLen = 4;
                                 if (recvLen < 516)
                                 {
@@ -178,21 +196,24 @@ namespace tftp
                                 }
                             }
                         }
-                        else if (recvBuff[1] == 5)
+                        else if (opcode == TFTP_OPCODE_ERROR)
                         {
-                            printf("error code is %d\n", recvBuff[3]);
+                            char errMsg[100];
+                            sprintf(errMsg, "error code: %d", recvBuff[3]);
+                            logger.write(Record(3, 1, errMsg));
                             clear(fp, clientSock);
                             return -1;
                         }
                         else
                         {
+                            logger.write(Record(3, 1, "unknown opcode"));
                             clear(fp, clientSock);
                             return -1;
                         }
                     }
                     if (op == TFTP_OPCODE_WRQ)
                     {
-                        if (recvBuff[1] == TFTP_OPCODE_ACK)
+                        if (opcode == TFTP_OPCODE_ACK)
                         {
                             if(blockNum == ackNum)
                             {
@@ -200,6 +221,7 @@ namespace tftp
                                 sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_DATA, ackNum >> 8, ackNum & 0xff);
                                 reqLen = fread(reqBuff + 4, 1, TFTP_DATA_SIZE, fp);
                                 bytes += reqLen;
+                                totalBytes += reqLen;
                                 if (reqLen == 0)
                                 {
                                     break;
@@ -207,14 +229,17 @@ namespace tftp
                                 reqLen += 4;
                             }
                         }
-                        else if (recvBuff[1] == 5)
+                        else if (opcode == TFTP_OPCODE_ERROR)
                         {
-                            printf("error code is %d\n", recvBuff[3]);
+                            char errMsg[100];
+                            sprintf(errMsg, "error code: %d", recvBuff[3]);
+                            logger.write(Record(3, 1, errMsg));
                             clear(fp, clientSock);
                             return -1;
                         }
                         else
                         {
+                            logger.write(Record(3, 1, "unknown opcode"));
                             clear(fp, clientSock);
                             return -1;
                         }
@@ -223,18 +248,19 @@ namespace tftp
             }
             else
             {
-                printf("time out\n");
+                logger.write(Record(3, 1, "timeout"));
                 errNum++;
                 if (errNum >= TFTP_RETRY)
                 {
-                    printf("retry times > 5, exit\n");
+                    logger.write(Record(2, 1, "retry too many times"));
                     clear(fp, clientSock);
                     return -1;
                 }
             }
         }
-        cout << endl;
-        printf("success\n");
+        velo.stop();
+        velo.showAvgV(totalBytes);
+        logger.write(Record(1, 0, "transfer complete, total blocks: " + to_string(i) + ", total bytes: " + to_string(totalBytes)));
         clear(fp, clientSock);
         return 0;
     }
