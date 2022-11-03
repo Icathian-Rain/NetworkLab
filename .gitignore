@@ -1,8 +1,9 @@
 # Prerequisites
 *.d
 
+*.pdf
 .idea
-
+.vscode
 
 *build*
 # Compiled Object files

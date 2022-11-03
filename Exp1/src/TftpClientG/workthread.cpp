@@ -19,7 +19,7 @@ std::string getCurrentTime()
 /// @param msg 记录信息 传输文件名或者错误信息
 Record::Record(int type,int status, std::string msg)
 {
-    const char *recordType[] = {"用户操作", "传输成功", "传输失败", "超时重传"};
+    const char *recordType[] = {"用户操作", "传输成功", "传输失败", "重传"};
     const char *recordStatus[] = {"成功", "失败"};
     this->time = getCurrentTime();
     this->type = recordType[type];
@@ -100,7 +100,7 @@ void workThread::showInsV(int bytes)
     double time = time_span.count();
     double velo = (double)bytes / time / 1024 * 1000;
     char buff[100];
-    sprintf(buff, " %.2f KB/s", velo);
+    sprintf(buff, "Instant V: %.2f KB/s", velo);
 //    browser->setText(buff);
     QString s(buff);
     emit sendV(s);
@@ -113,7 +113,7 @@ void workThread::showAvgV(int bytes)
     double time = time_span.count();
     double velo = (double)bytes / time / 1024 * 1000;
     char buff[100];
-    sprintf(buff, " %.2f KB/s", velo);
+    sprintf(buff, "Average V: %.2f KB/s", velo);
 //    browser->setText(buff);
     QString s(buff);
     emit sendV(s);
@@ -180,7 +180,7 @@ bool workThread::Request()
     int totalBytes = 0;
     this->startV();
     int i;
-    for(i = 0; ; i++)
+    for(i = 0; ; )
     {
         // 测速器输出速率, 每1000个包输出一次
         if(i % 1000 == 0)
@@ -225,6 +225,7 @@ bool workThread::Request()
                     {
                         if(blockNum == (ackNum + 1))
                         {
+                            i ++;
                             ackNum++;
                             sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_ACK, recvBuff[2], recvBuff[3]);
                             fwrite(recvBuff + 4, 1, recvLen - 4, fp);
@@ -236,6 +237,12 @@ bool workThread::Request()
                                 sendto(clientSock, reqBuff, reqLen, 0, (struct sockaddr *)&addr, sizeof(addr));
                                 break;
                             }
+                        }
+                        else
+                        {
+                            char errMsg[100];
+                            sprintf(errMsg, "%d Lost, transform again", ackNum+1);
+                            write(Record(3, 1, errMsg));
                         }
                     }
                     else if (opcode == TFTP_OPCODE_ERROR)
@@ -259,6 +266,7 @@ bool workThread::Request()
                     {
                         if(blockNum == ackNum)
                         {
+                            i ++;
                             ackNum++;
                             sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_DATA, ackNum >> 8, ackNum & 0xff);
                             reqLen = fread(reqBuff + 4, 1, TFTP_DATA_SIZE, fp);
@@ -270,6 +278,13 @@ bool workThread::Request()
                             }
                             reqLen += 4;
                         }
+                        else
+                        {
+                            char errMsg[100];
+                            sprintf(errMsg, "%d Lost, transform again", ackNum-1);
+                            write(Record(3, 1, errMsg));
+                        }
+
                     }
                     else if (opcode == TFTP_OPCODE_ERROR)
                     {
