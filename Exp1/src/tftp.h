@@ -168,7 +168,6 @@ namespace tftp
                 recvLen = recvfrom(clientSock, (char *)recvBuff, 1024, 0, (struct sockaddr *)&from, &fromlen);
                 if (recvLen > 0)
                 {
-                    i++;
                     errNum = 0;
                     // 更改目的地址
                     memcpy((struct sockaddr *)&addr, (struct sockaddr *)&from, sizeof(fromlen));
@@ -184,6 +183,7 @@ namespace tftp
                         {
                             if(blockNum == (ackNum + 1))
                             {
+                                i++;
                                 ackNum++;
                                 sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_ACK, recvBuff[2], recvBuff[3]);
                                 fwrite(recvBuff + 4, 1, recvLen - 4, fp);
@@ -224,6 +224,7 @@ namespace tftp
                         {
                             if(blockNum == ackNum)
                             {
+                                i++;
                                 ackNum++;
                                 sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_DATA, ackNum >> 8, ackNum & 0xff);
                                 reqLen = fread(reqBuff + 4, 1, TFTP_DATA_SIZE, fp);

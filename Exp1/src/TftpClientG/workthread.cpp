@@ -210,7 +210,6 @@ bool workThread::Request()
             recvLen = recvfrom(clientSock, (char *)recvBuff, 1024, 0, (struct sockaddr *)&from, &fromlen);
             if (recvLen > 0)
             {
-                i++;
                 errNum = 0;
                 // 更改目的地址
                 memcpy((struct sockaddr *)&addr, (struct sockaddr *)&from, sizeof(fromlen));
