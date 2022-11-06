@@ -4,7 +4,7 @@
 #include<cstdio>
 #include<vector>
 
-const char *recordType[] = {"用户操作", "传输成功", "传输失败", "超时重传"};
+const char *recordType[] = {"用户操作", "传输成功", "传输失败", "重传"};
 
 std::string getCurrentTime()
 {
@@ -42,7 +42,7 @@ public:
 /// @param msg 记录信息 传输文件名或者错误信息
 Record::Record(int type,int status, std::string msg)
 {
-    const char *recordType[] = {"用户操作", "传输成功", "传输失败", "超时重传"};
+    const char *recordType[] = {"用户操作", "传输成功", "传输失败", "重传"};
     const char *recordStatus[] = {"成功", "失败"};
     this->time = getCurrentTime();
     this->type = recordType[type];

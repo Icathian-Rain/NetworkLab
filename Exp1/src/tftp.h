@@ -138,7 +138,7 @@ namespace tftp
         int totalBytes = 0;
         velo.start();
         int i;
-        for(i = 0; ; i++)
+        for(i = 0; ;)
         {
             // 测速器输出速率
             if(i % 1000 == 0)
@@ -168,6 +168,7 @@ namespace tftp
                 recvLen = recvfrom(clientSock, (char *)recvBuff, 1024, 0, (struct sockaddr *)&from, &fromlen);
                 if (recvLen > 0)
                 {
+                    i++;
                     errNum = 0;
                     // 更改目的地址
                     memcpy((struct sockaddr *)&addr, (struct sockaddr *)&from, sizeof(fromlen));
@@ -194,6 +195,12 @@ namespace tftp
                                     sendto(clientSock, reqBuff, reqLen, 0, (struct sockaddr *)&addr, sizeof(addr));
                                     break;
                                 }
+                            }
+                            else
+                            {
+                                char errMsg[100];
+                                sprintf(errMsg, "%d Lost, transform again", ackNum+1);
+                                logger.write(Record(3, 1, errMsg));
                             }
                         }
                         else if (opcode == TFTP_OPCODE_ERROR)
@@ -227,6 +234,12 @@ namespace tftp
                                     break;
                                 }
                                 reqLen += 4;
+                            }
+                            else
+                            {
+                                char errMsg[100];
+                                sprintf(errMsg, "%d Lost, transform again", ackNum-1);
+                                logger.write(Record(3, 1, errMsg));
                             }
                         }
                         else if (opcode == TFTP_OPCODE_ERROR)
