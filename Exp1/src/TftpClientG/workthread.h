@@ -33,6 +33,7 @@
 using namespace std;
 
 std::string getCurrentTime();
+extern FILE *fp;
 
 class Record
 {

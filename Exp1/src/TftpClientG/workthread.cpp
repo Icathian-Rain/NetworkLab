@@ -66,12 +66,10 @@ workThread::workThread()
     mode = TFTP_OCTET;
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
-    fp1 = fopen("log.txt", "w");
 }
 
 workThread::~workThread()
 {
-    fclose(fp1);
     WSACleanup();
 }
 
@@ -93,28 +91,38 @@ void workThread::stopV()
     endTime = chrono::high_resolution_clock::now();
 }
 
+/// @brief 输出瞬时速率
+/// @param bytes 
 void workThread::showInsV(int bytes)
 {
+    // 获取当前时间
     auto nowTime = chrono::high_resolution_clock::now();
+    // 计算时间差
     chrono::duration<double, std::milli> time_span = chrono::duration_cast<chrono::duration<double>>(nowTime - timePoint);
     double time = time_span.count();
+    // 计算速率
     double velo = (double)bytes / time / 1024 * 1000;
+    // 发出信号,更新速率
     char buff[100];
     sprintf(buff, "Instant V: %.2f KB/s", velo);
-//    browser->setText(buff);
     QString s(buff);
     emit sendV(s);
+    // 更新时间点
     timePoint = nowTime;
 }
 
+/// @brief 输出平均速率
+/// @param bytes 
 void workThread::showAvgV(int bytes)
 {
+    // 计算时间差
     chrono::duration<double, std::milli> time_span = chrono::duration_cast<chrono::duration<double>>(endTime - startTime);
     double time = time_span.count();
+    // 计算速率
     double velo = (double)bytes / time / 1024 * 1000;
+    // 发出信号,更新速率
     char buff[100];
     sprintf(buff, "Average V: %.2f KB/s", velo);
-//    browser->setText(buff);
     QString s(buff);
     emit sendV(s);
 }
@@ -222,16 +230,22 @@ bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
                 // 若为读取操作
                 {
                     if (opcode == TFTP_OPCODE_DATA)
+                    // 判断操作码
                     {
+                        // 若操作码为数据分组
                         if(blockNum == ((ackNum + 1) & 0xffff))
                         {
                             i ++;
                             ackNum++;
+                            // 构造下一个包
                             sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_ACK, recvBuff[2], recvBuff[3]);
+                            reqLen = 4;
+                            // 写入文件
                             fwrite(recvBuff + 4, 1, recvLen - 4, fp);
+                            // 计算字节数
                             bytes += recvLen - 4;
                             totalBytes += recvLen - 4;
-                            reqLen = 4;
+                            // 判断是否为最后一个分组
                             if (recvLen < 516)
                             {
                                 sendto(clientSock, reqBuff, reqLen, 0, (struct sockaddr *)&addr, sizeof(addr));
@@ -240,12 +254,14 @@ bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
                         }
                         else
                         {
+                            // 若分组号不对, 重发上一个包
                             char errMsg[100];
                             sprintf(errMsg, "%d Lost, transform again", ackNum+1);
                             write(Record(3, 1, errMsg));
                         }
                     }
                     else if (opcode == TFTP_OPCODE_ERROR)
+                    // 若操作码错误
                     {
                         char errMsg[100];
                         sprintf(errMsg, "error code: %d", recvBuff[3]);
@@ -254,6 +270,7 @@ bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
                         return -1;
                     }
                     else
+                    // 若操作码未知
                     {
                         write(Record(3, 1, "unknown opcode"));
                         clear(fp, clientSock);
@@ -261,22 +278,27 @@ bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
                     }
                 }
                 if (op == TFTP_OPCODE_WRQ)
+                // 若为写操作
                 {
+                    // 判断操作码
                     if (opcode == TFTP_OPCODE_ACK)
                     {
                         if(blockNum == ackNum)
+                        // 判断分组号
                         {
                             i ++;
                             ackNum++;
+                            // 读取文件,构建数据包
                             sprintf(reqBuff, "%c%c%c%c", 0, TFTP_OPCODE_DATA, ackNum >> 8, ackNum & 0xff);
                             reqLen = fread(reqBuff + 4, 1, TFTP_DATA_SIZE, fp);
-                            bytes += reqLen;
-                            totalBytes += reqLen;
                             if (reqLen == 0)
                             {
                                 break;
                             }
+                            // 计算字节数
                             reqLen += 4;
+                            bytes += reqLen;
+                            totalBytes += reqLen;
                         }
                         else
                         {
@@ -305,9 +327,12 @@ bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
         }
         else
         {
+            // 超时处理
+            // 写入错误日志
             write(Record(3, 1, "timeout"));
             errNum++;
             if (errNum >= TFTP_RETRY)
+            // 超过重试次数
             {
                 write(Record(2, 1, "retry too many times"));
                 clear(fp, clientSock);
@@ -322,7 +347,12 @@ bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
     return true;
 }
 
-
+/// @brief 工作线程配置
+/// @param ip 
+/// @param port 
+/// @param fileName 
+/// @param op 
+/// @param mode 
 void workThread::set(char *ip, int port, char *fileName, int op, int mode)
 {
     strcpy(this->serverIP, ip);
@@ -338,19 +368,25 @@ void workThread::run()
     this->Request(this->serverIP, this->port, this->fileName, this->op, this->mode);
 }
 
-
+/// @brief 日志写入
+/// @param record 
 void workThread::write(Record record)
 {
+    // 构建日志信息字符串
     std::string msg = record.toString() + "\n";
-    fwrite(msg.c_str(), sizeof(char), msg.length(), fp1);
+    // 写入日志文件
+    fwrite(msg.c_str(), sizeof(char), msg.length(), fp);
+    // 发出信号,更新界面
     QString s(msg.c_str());
     emit sendM(s);
 }
 
+/// @brief 日志读出
+/// @param records 
 void workThread::read(std::vector<Record> &records)
 {
     char tmp[1024];
-    while (fgets(tmp, 1024, fp1) != nullptr)
+    while (fgets(tmp, 1024, fp) != nullptr)
     {
         Record record(tmp);
         records.push_back(record);
