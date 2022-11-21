@@ -73,7 +73,7 @@ public:
     workThread();
     ~workThread();
     void set(char *ip, int port, char *fileName, int op, int mode);
-    bool Request();
+    bool Request(char *ip, int port, char *fileName, int op, int mode);
     static void clear(FILE *, SOCKET);
     void startV();
     void stopV();

@@ -120,14 +120,14 @@ void workThread::showAvgV(int bytes)
 }
 
 
-bool workThread::Request()
+bool workThread::Request(char *ip, int port, char *fileName, int op, int mode)
 {
     const char *TransferMode[2] = {"netascii", "octet"};
      // 初始化目的地址
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(this->port);
-    addr.sin_addr.S_un.S_addr = inet_addr(this->serverIP);
+    addr.sin_port = htons(port);
+    addr.sin_addr.S_un.S_addr = inet_addr(ip);
     // 初始化客户端套接字
     SOCKET clientSock = socket(AF_INET, SOCK_DGRAM, 0);
     if (clientSock == -1)
@@ -335,7 +335,7 @@ void workThread::set(char *ip, int port, char *fileName, int op, int mode)
 
 void workThread::run()
 {
-    this->Request();
+    this->Request(this->serverIP, this->port, this->fileName, this->op, this->mode);
 }
 
 
