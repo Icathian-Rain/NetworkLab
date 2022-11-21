@@ -29,6 +29,5 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    workThread *thread;
 };
 #endif // MAINWINDOW_H

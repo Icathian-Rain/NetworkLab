@@ -8,19 +8,15 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     char ip[20] = "127.0.0.1";
-    this->thread = new workThread();
     ui->setupUi(this);
     ui->directoryPath->setPlaceholderText("./");
     ui->serverIP->setPlainText("127.0.0.1");
     ui->serverPort->setValue(69);
     ui->fileName->setPlainText("test.txt");
-    connect(this->thread, SIGNAL(sendV(QString)), this, SLOT(on_sendV(QString)));
-    connect(this->thread, SIGNAL(sendM(QString)), this, SLOT(on_sendM(QString)));
 }
 
 MainWindow::~MainWindow()
 {
-    delete this->thread;
     delete ui;
 }
 
@@ -46,6 +42,7 @@ void MainWindow::on_upLoad_clicked()
 
 void MainWindow::on_pushButton_2_clicked()
 {
+    auto thread = new workThread();
     char ip[20], fileName[100];
     int port, op, mode;
     strcpy(ip, ui->serverIP->toPlainText().toStdString().c_str());
@@ -53,6 +50,8 @@ void MainWindow::on_pushButton_2_clicked()
     op = ui->upLoad->isChecked() ? TFTP_OPCODE_WRQ : TFTP_OPCODE_RRQ;
     mode = ui->netasciiMode->isChecked() ? TFTP_NETASCII : TFTP_OCTET;
     strcpy(fileName, ui->fileName->toPlainText().toStdString().c_str());
+    connect(thread, SIGNAL(sendV(QString)), this, SLOT(on_sendV(QString)));
+    connect(thread, SIGNAL(sendM(QString)), this, SLOT(on_sendM(QString)));
     thread->set(ip, port, fileName, op, mode);
     thread->start();
 }

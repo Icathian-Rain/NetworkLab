@@ -223,7 +223,7 @@ bool workThread::Request()
                 {
                     if (opcode == TFTP_OPCODE_DATA)
                     {
-                        if(blockNum == (ackNum + 1))
+                        if(blockNum == ((ackNum + 1) & 0xffff))
                         {
                             i ++;
                             ackNum++;
